@@ -13,7 +13,10 @@ import {
 import { useAppDispatch, useAppSelector } from "@/store/store-hook";
 import { createBidAction } from "@/features/bid/bid.action";
 import { getItemAction } from "@/features/item/item.action";
-
+import { getSocket } from "@/lib/socket";
+import { useRouter } from "next/router";
+import { Socket } from "socket.io-client";
+import { setItem } from "@/features/item/item.slice";
 
 const StatCard = ({
   label,
@@ -41,6 +44,7 @@ const StatCard = ({
 
 export default function App({ params }: { params: { id: string } }) {
   const dispatch = useAppDispatch();
+  const socket = getSocket();
   const auction = useAppSelector((state) => state.item.currentItem);
   const { isLoading } = useAppSelector((state) => state.bid);
   const currentUserId = useAppSelector((state) => state.user.id);
@@ -83,8 +87,25 @@ export default function App({ params }: { params: { id: string } }) {
     await dispatch(
       createBidAction({ itemId: allParams.id, bidAmount: Number(bidAmount) }),
     );
-    await dispatch(getItemAction(allParams.id));
   };
+
+  useEffect(() => {
+    (async function () {
+      const allParams = await params;
+      socket.emit("join-auction", { auctionId: allParams.id });
+    })();
+
+    const handleNewBid = (data: any) => {
+      dispatch(setItem(data));
+      setBidAmount(Number(data.bid.bidAmount));
+    };
+
+    socket.on("new-bid", handleNewBid);
+
+    return () => {
+      socket.off("new-bid", handleNewBid);
+    };
+  }, []);
 
   return (
     <div className="h-screen w-full bg-[#0f172a] text-slate-100 flex flex-col overflow-hidden p-4 md:p-6">
@@ -165,7 +186,8 @@ export default function App({ params }: { params: { id: string } }) {
                     Highest Bid
                   </p>
                   <p className="text-2xl font-black text-white">
-                {  auction?.currentHighestBid &&   Number(auction?.currentHighestBid).toLocaleString()}
+                    {auction?.currentHighestBid &&
+                      Number(auction?.currentHighestBid).toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -181,8 +203,20 @@ export default function App({ params }: { params: { id: string } }) {
                   icon={Clock}
                   colorClass="bg-amber-500/20 text-amber-500"
                 />
-                <StatCard label="Bids" value={`${auction?.bids?.length}`} icon={TrendingUp} colorClass="bg-indigo-500/20 text-indigo-500" />
-                <StatCard label="Bidders" value={(new Set(auction?.bids?.map(b => b?.user?.name))).size.toString()} icon={User} colorClass="bg-emerald-500/20 text-emerald-500" />
+                <StatCard
+                  label="Bids"
+                  value={`${auction?.bids?.length}`}
+                  icon={TrendingUp}
+                  colorClass="bg-indigo-500/20 text-indigo-500"
+                />
+                <StatCard
+                  label="Bidders"
+                  value={new Set(
+                    auction?.bids?.map((b) => b?.user?.name),
+                  ).size.toString()}
+                  icon={User}
+                  colorClass="bg-emerald-500/20 text-emerald-500"
+                />
               </div>
             </div>
           </div>

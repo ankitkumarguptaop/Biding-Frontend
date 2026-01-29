@@ -15,6 +15,7 @@ import { useAppDispatch, useAppSelector } from "@/store/store-hook";
 import Image from "next/image";
 import { Item, Status } from "@/features/item/item.slice";
 import { getItemAction, listItemAction } from "@/features/item/item.action";
+import { getSocket } from "@/lib/socket";
 
 export default function App() {
   const router = useRouter();
@@ -29,6 +30,27 @@ export default function App() {
   useEffect(() => {
     dispatch(listItemAction(filter));
   }, [filter]);
+      useEffect(() => {
+      const socket = getSocket();
+  
+      socket.on("connect", () => {
+        console.log("Connected to server:", socket.id);
+      });
+  
+      socket.on("disconnect", () => {
+        console.log("Disconnected from server");
+      });
+  
+      socket.on("connect_error", (err) => {
+        console.error("Connection error:", err.message);
+      });
+  
+      return () => {
+        socket.off("connect");
+        socket.off("disconnect");
+        socket.off("connect_error");
+      };
+    }, []);
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-100 font-sans selection:bg-indigo-500/30">
@@ -104,7 +126,7 @@ function HomePage({ auctions, onSelectItem, activeFilter, setFilter }: any) {
     <div className="max-w-7xl mx-auto animate-in fade-in duration-500">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8 bg-slate-800/20 p-2 rounded-3xl border border-slate-700/30 backdrop-blur-sm">
         <div className="flex gap-2">
-          {["ALL", "LIVE", "UPCOMING", "EXPIRED"].map((f) => (
+          {["ALL", "LIVE", "UPCOMING", "EXPIRED", "CLOSED"].map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -140,14 +162,25 @@ function HomePage({ auctions, onSelectItem, activeFilter, setFilter }: any) {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent"></div>
               <div className="absolute top-4 left-4 flex gap-2">
-                {item.status === Status.LIVE ? (
+                {item.status === Status.LIVE && (
                   <span className="bg-red-500 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-lg">
                     <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>{" "}
                     Live
                   </span>
-                ) : (
-                  <span className="bg-slate-900/90 text-slate-300 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">
+                )}
+                {item.status === Status.UPCOMING && (
+                  <span className="bg-blue-500/90 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-400/30 shadow-lg">
                     Upcoming
+                  </span>
+                )}
+                {item.status === Status.EXPIRED && (
+                  <span className="bg-amber-500/90 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-amber-400/30">
+                    Expired
+                  </span>
+                )}
+                {item.status === Status.CLOSED && (
+                  <span className="bg-slate-700/90 text-slate-300 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-slate-600/50">
+                    Closed
                   </span>
                 )}
               </div>

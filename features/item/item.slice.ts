@@ -1,4 +1,4 @@
-import { createSlice } from "@reduxjs/toolkit";
+import { createSlice, current } from "@reduxjs/toolkit";
 import { createItemAction, getItemAction, listItemAction } from "./item.action";
 import { Inter } from "next/font/google";
 
@@ -10,17 +10,16 @@ export enum Status {
   ALL = "ALL",
 }
 
-export interface  Bids{
+export interface Bids {
   id: string;
   bidAmount: number;
   createdAt: string;
-  user  :{
+  user: {
     id: string;
     name: string;
     email: string;
-  }
-} 
-
+  };
+}
 
 export interface Item {
   id: string;
@@ -36,11 +35,11 @@ export interface Item {
   updatedAt: string;
   currentHighestBid: number;
   bids: Bids[];
-  currentWinner :{
+  currentWinner: {
     id: string;
     name: string;
     email: string;
-  }
+  };
 }
 
 interface ItemInitialState {
@@ -58,7 +57,17 @@ const initialState: ItemInitialState = {
 const itemSlice = createSlice({
   name: "item",
   initialState,
-  reducers: {},
+  reducers: {
+    setItem: (state, action) => {
+      state.currentItem = {
+        ...state.currentItem,
+        currentHighestBid: action.payload.bid.bidAmount,
+        currentWinner: action.payload.bid.user,
+        bids: [action.payload.bid, ...state.currentItem.bids],
+      };
+      console.log(state.currentItem)
+    },
+  },
   extraReducers: (builder) => {
     builder.addCase(listItemAction.pending, (state, action) => {
       state.isLoading = true;
@@ -80,7 +89,7 @@ const itemSlice = createSlice({
     builder.addCase(getItemAction.rejected, (state, action) => {
       state.isLoading = false;
     });
-     builder.addCase(createItemAction.pending, (state, action) => {
+    builder.addCase(createItemAction.pending, (state, action) => {
       state.isLoading = true;
     });
     builder.addCase(createItemAction.fulfilled, (state, action) => {
@@ -93,3 +102,4 @@ const itemSlice = createSlice({
 });
 
 export const itemReducer = itemSlice.reducer;
+export const { setItem } = itemSlice.actions;
