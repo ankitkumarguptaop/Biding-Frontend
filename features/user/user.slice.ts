@@ -2,6 +2,7 @@ import { createSlice } from "@reduxjs/toolkit";
 import { signInAction, signUpAction } from "./user.action";
 
 interface User {
+  id:string
   name: string;
   email: string;
   image: string;
@@ -10,6 +11,7 @@ interface User {
 }
 
 const initialState: User = {
+  id: "",
   name: "",
   email: "",
   image: "",

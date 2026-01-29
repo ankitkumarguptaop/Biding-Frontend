@@ -3,9 +3,6 @@ import createWebStorage from "redux-persist/es/storage/createWebStorage";
 
 export const axiosInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
 });
 
 axiosInstance.interceptors.request.use(

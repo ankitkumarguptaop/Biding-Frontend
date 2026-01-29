@@ -14,7 +14,7 @@ import { useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/store/store-hook";
 import Image from "next/image";
 import { Item, Status } from "@/features/item/item.slice";
-import { listItemAction } from "@/features/item/item.action";
+import { getItemAction, listItemAction } from "@/features/item/item.action";
 
 export default function App() {
   const router = useRouter();
@@ -24,8 +24,7 @@ export default function App() {
   const [view, setView] = useState<"home" | "details">("home");
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [filter, setFilter] = useState<Status | string>("ALL");
-  console.log("✌️filter --->", filter);
+  const [filter, setFilter] = useState<Status>(Status.ALL);
 
   useEffect(() => {
     dispatch(listItemAction(filter));
@@ -33,14 +32,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-100 font-sans selection:bg-indigo-500/30">
-      {/* Background Decor */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-indigo-500/10 blur-[120px] rounded-full"></div>
         <div className="absolute top-[20%] -right-[10%] w-[30%] h-[30%] bg-purple-500/10 blur-[120px] rounded-full"></div>
       </div>
 
       <div className="relative z-10 p-4 md:p-8">
-        {/* Header */}
         <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
           <div className="cursor-pointer" onClick={() => setView("home")}>
             <h1 className="text-3xl font-black tracking-tight flex items-center gap-3 text-white">
@@ -92,7 +89,8 @@ export default function App() {
           auctions={items}
           activeFilter={filter}
           setFilter={setFilter}
-          onSelectItem={(id: number) => {
+          onSelectItem= {async (id: string) => {
+            await  dispatch(getItemAction(id));
             router.push(`items/${id}`);
           }}
         />
@@ -104,10 +102,9 @@ export default function App() {
 function HomePage({ auctions, onSelectItem, activeFilter, setFilter }: any) {
   return (
     <div className="max-w-7xl mx-auto animate-in fade-in duration-500">
-      {/* Filters Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8 bg-slate-800/20 p-2 rounded-3xl border border-slate-700/30 backdrop-blur-sm">
         <div className="flex gap-2">
-          {["ALL", "LIVE", "UPCOMING"].map((f) => (
+          {["ALL", "LIVE", "UPCOMING", "EXPIRED"].map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -123,13 +120,13 @@ function HomePage({ auctions, onSelectItem, activeFilter, setFilter }: any) {
         </div>
         <div className="flex items-center gap-4 px-4 text-slate-500 text-sm font-bold">
           <Filter size={18} />
-          <span>Showing {auctions.length} Results</span>
+          <span>Showing {auctions?.length} Results</span>
         </div>
       </div>
 
       {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {auctions.map((item: Item) => (
+        {auctions?.map((item: Item) => (
           <div
             key={item.id}
             onClick={() => onSelectItem(item.id)}

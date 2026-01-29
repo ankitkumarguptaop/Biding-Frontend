@@ -1,3 +1,4 @@
+import { bidReducer } from "@/features/bid/bid.slice";
 import { itemReducer } from "@/features/item/item.slice";
 import { userReducer } from "@/features/user/user.slice";
 import type { Action, ThunkAction } from "@reduxjs/toolkit";
@@ -17,11 +18,14 @@ export const storage = createWebStorage("local");
 const persistConfig = {
   key: "root",
   storage,
+  blacklist :[ 'item' ,'bid' ] // Add slices you don't want to persist here
 };
 
 const rootReducer = combineSlices({
   user: userReducer,
   item: itemReducer,
+  bid: bidReducer,
+  
 });
 
 export type RootState = ReturnType<typeof rootReducer>;

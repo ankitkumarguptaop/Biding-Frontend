@@ -1,10 +1,11 @@
 "use client"
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { 
   Gavel, 
   LayoutDashboard, 
-  PackagePlus, 
-  List, 
   History, 
   TrendingUp, 
   Box, 
@@ -14,131 +15,136 @@ import {
   MoreVertical,
   ArrowUpRight,
   Clock,
-  Trash2,
-  Calendar,
   X,
   Image as ImageIcon
 } from 'lucide-react';
+import { useAppDispatch, useAppSelector } from '@/store/store-hook';
+import { createItemAction, listItemAction } from '@/features/item/item.action';
+import { Status } from '@/features/item/item.slice';
+import { listBidAction } from '@/features/bid/bid.action';
+import Image from 'next/image';
 
-// --- Type Definitions (Updated to match Backend Schema) ---
-interface Item {
-  id: string;
-  title: string;
-  description: string;
-  minBidPrice: number;
-  currentHighestBid: number;
-  totalBids: number;
-  status: 'UPCOMING' | 'LIVE' | 'CLOSED' | 'EXPIRED';
-  startTime: string;
-  endTime: string;
-  autoClose: boolean;
-}
+const createItemSchema = z.object({
+  title: z.string().min(3, 'Title must be at least 3 characters').max(100, 'Title is too long'),
+  description: z.string().min(10, 'Description must be at least 10 characters'),
+  minBidPrice: z.string()
+    .min(1, 'Minimum bid price is required')
+    .refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
+      message: 'Price must be a positive number',
+    }),
+  startTime: z.string().min(1, 'Start time is required'),
+  endTime: z.string().min(1, 'End time is required'),
+  status: z.enum(['UPCOMING', 'LIVE', 'CLOSED', 'EXPIRED']),
+}).refine((data) => {
+  const start = new Date(data.startTime);
+  const end = new Date(data.endTime);
+  return end > start;
+}, {
+  message: 'End time must be after start time',
+  path: ['endTime'],
+});
 
-interface Bid {
-  id: string;
-  itemId: string;
-  bidder: string;
-  amount: number;
-  time: string;
-}
+type CreateItemFormData = z.infer<typeof createItemSchema>;
 
 const App: React.FC = () => {
+  const dispatch = useAppDispatch();
+  const { bids , totalCount} = useAppSelector((state)=> state.bid)
   const [activeTab, setActiveTab] = useState<'dashboard' | 'items' | 'history'>('dashboard');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'LIVE' | 'CLOSED'>('all');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const items = useAppSelector((state)=> state.item.items )
 
-  // --- Mock Data ---
-  const [items, setItems] = useState<Item[]>([
-    { 
-      id: '1', 
-      title: 'Vintage Rolex Daytona', 
-      description: 'A rare 1970s timepiece in pristine condition.', 
-      minBidPrice: 15000, 
-      currentHighestBid: 18500, 
-      totalBids: 12, 
-      status: 'LIVE', 
-      startTime: '2023-10-01T10:00', 
-      endTime: '2023-10-05T10:00',
-      autoClose: true 
-    },
-    { 
-      id: '2', 
-      title: '1964 Ferrari 250 GTO', 
-      description: 'One of the most sought-after cars in history.', 
-      minBidPrice: 500000, 
-      currentHighestBid: 720000, 
-      totalBids: 45, 
-      status: 'LIVE', 
-      startTime: '2023-10-02T12:00', 
-      endTime: '2023-10-10T12:00',
-      autoClose: true
-    },
-    { 
-      id: '3', 
-      title: 'Bored Ape Yacht Club #44', 
-      description: 'Premium digital collectible on Ethereum.', 
-      minBidPrice: 45, 
-      currentHighestBid: 62, 
-      totalBids: 8, 
-      status: 'CLOSED', 
-      startTime: '2023-09-01T10:00', 
-      endTime: '2023-09-05T10:00',
-      autoClose: true
-    },
-  ]);
-
-  const bids: Bid[] = [
-    { id: 'b1', itemId: '1', bidder: 'John Smith', amount: 18500, time: '2 mins ago' },
-    { id: 'b2', itemId: '1', bidder: 'Sarah Lane', amount: 18200, time: '10 mins ago' },
-    { id: 'b3', itemId: '2', bidder: 'CryptoWhale', amount: 720000, time: '1 min ago' },
-  ];
-
-  // --- Dashboard Stats Calculations ---
-  const totalBidsCount = items.reduce((acc, curr) => acc + curr.totalBids, 0);
-  const activeItemsCount = items.filter(i => i.status === 'LIVE').length;
-  const closedItemsCount = items.filter(i => i.status === 'CLOSED').length;
-  const totalVolume = items.reduce((acc, curr) => acc + curr.currentHighestBid, 0);
-
-  // --- Form Logic for New Item ---
-  const [newItem, setNewItem] = useState({
-    title: '',
-    description: '',
-    minBidPrice: '',
-    startTime: '',
-    endTime: '',
-    autoClose: true,
-    status: 'UPCOMING' as Item['status']
+  const { 
+    register, 
+    handleSubmit, 
+    watch, 
+    reset,
+    formState: { errors, isSubmitting } 
+  } = useForm<CreateItemFormData>({
+    resolver: zodResolver(createItemSchema),
+    defaultValues: {
+      title: '',
+      description: '',
+      minBidPrice: '',
+      startTime: '',
+      endTime: '',
+      status: 'UPCOMING'
+    }
   });
-  
-  const handleAddItem = (e: React.FormEvent) => {
-    e.preventDefault();
-    const item: Item = {
-      id: Math.random().toString(36).substr(2, 9),
-      title: newItem.title,
-      description: newItem.description,
-      minBidPrice: Number(newItem.minBidPrice),
-      currentHighestBid: Number(newItem.minBidPrice),
-      totalBids: 0,
-      status: newItem.status,
-      startTime: newItem.startTime,
-      endTime: newItem.endTime,
-      autoClose: newItem.autoClose
-    };
-    setItems([item, ...items]);
-    setNewItem({ title: '', description: '', minBidPrice: '', startTime: '', endTime: '', autoClose: true, status: 'UPCOMING' });
-    setShowAddModal(false);
+
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        setImageError('Image size should be less than 5MB');
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        setImageError('Please select a valid image file');
+        return;
+      }
+      setImageFile(file);
+      setImageError('');
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
-  const filteredItems = items.filter(item => {
-    if (filter === 'LIVE') return item.status === 'LIVE';
-    if (filter === 'CLOSED') return item.status === 'CLOSED';
-    return true;
-  });
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+  
+  const onSubmit = async (data: CreateItemFormData) => {
+    if (!imageFile) {
+      setImageError('Item image is required');
+      return;
+    }
+
+    setImageError('');
+    const formData = new FormData();
+    formData.append('title', data.title);
+    formData.append('description', data.description);
+    formData.append('minBidPrice', data.minBidPrice);
+    formData.append('startTime', data.startTime);
+    formData.append('endTime', data.endTime);
+    formData.append('status', data.status);
+    formData.append('image', imageFile);
+
+    try {
+      await dispatch(createItemAction(formData)).unwrap();
+      
+      reset();
+      removeImage();
+      setShowAddModal(false);
+    } catch (error) {
+      console.error('Failed to create item:', error);
+    }
+  };
+  const [filter, setFilter] = useState<Status>(Status.ALL);
+
+  useEffect(() => {
+    dispatch(listItemAction(filter));
+  }, [filter]);
+
+  useEffect(() => {
+    dispatch(listBidAction());
+  }, []);
+
 
   return (
     <div className="min-h-screen bg-[#0a0a0c] text-slate-200 flex flex-col md:flex-row font-sans">
       
-      {/* Sidebar */}
       <aside className="w-full md:w-64 bg-[#121214] border-b md:border-b-0 md:border-r border-slate-800 p-6 flex flex-col">
         <div className="flex items-center gap-3 mb-10">
           <div className="p-2 bg-indigo-600 rounded-lg">
@@ -170,7 +176,6 @@ const App: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main Content Area */}
       <main className="flex-1 p-6 md:p-10 overflow-y-auto">
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
@@ -189,20 +194,16 @@ const App: React.FC = () => {
           )}
         </div>
 
-        {/* Dashboard View */}
         {activeTab === 'dashboard' && (
           <div className="space-y-8">
-            {/* Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard icon={<Box className="text-indigo-400" />} label="Active Items" value={activeItemsCount} trend="+3 from last week" />
-              <StatCard icon={<TrendingUp className="text-emerald-400" />} label="Total Bids" value={totalBidsCount} trend="+12% activity" />
-              <StatCard icon={<CheckCircle2 className="text-purple-400" />} label="Sold Items" value={closedItemsCount} trend="85% clearance" />
-              <StatCard icon={<ArrowUpRight className="text-orange-400" />} label="Total Value" value={`$${(totalVolume/1000).toFixed(1)}k`} trend="Market cap" />
+              <StatCard icon={<Box className="text-indigo-400" />} label="Active Items" value={10}  />
+              <StatCard icon={<TrendingUp className="text-emerald-400" />} label="Total Bids" value={totalCount} trend="+12% activity" />
+              <StatCard icon={<CheckCircle2 className="text-purple-400" />} label="Sold Items" value={2} trend="85% clearance" />
+              <StatCard icon={<ArrowUpRight className="text-orange-400" />} label="Total Value" value={`$${(100000/1000).toFixed(1)}k`} trend="Market cap" />
             </div>
 
-            {/* Main Dashboard Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Recent Bids List */}
               <div className="lg:col-span-2 bg-[#121214] border border-slate-800 rounded-2xl p-6">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="font-bold flex items-center gap-2">
@@ -211,21 +212,21 @@ const App: React.FC = () => {
                   <button onClick={() => setActiveTab('history')} className="text-xs font-bold text-indigo-400 hover:underline transition-all">View All</button>
                 </div>
                 <div className="space-y-4">
-                  {bids.map(bid => (
+                  {bids?.length>0 && bids.filter((bid, i )=>  i<6 )?.map(bid => (
                     <div key={bid.id} className="flex items-center justify-between p-3 rounded-xl bg-[#16161a] border border-slate-800/50 hover:border-slate-700 transition-all">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center">
-                          <ImageIcon className="w-5 h-5 text-slate-500" />
+                          <Image width={200} height={200} src={bid.item.image} objectFit='contain' alt={"Item Image"}className="text-slate-500" />
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-white">{bid.bidder}</p>
-                          <p className="text-[11px] text-slate-500">on {items.find(i => i.id === bid.itemId)?.title}</p>
+                          <p className="text-sm font-bold text-white">{bid.user.name}</p>
+                          <p className="text-[11px] text-slate-500">on {bid.item.title}</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-bold text-emerald-400">+${bid.amount.toLocaleString()}</p>
+                        <p className="text-sm font-bold text-emerald-400">+${bid.bidAmount.toLocaleString()}</p>
                         <p className="text-[10px] text-slate-500 flex items-center justify-end gap-1">
-                          <Clock className="w-3 h-3" /> {bid.time}
+                          <Clock className="w-3 h-3" /> {new Date(bid.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
                     </div>
@@ -250,9 +251,9 @@ const App: React.FC = () => {
         {activeTab === 'items' && (
           <div className="space-y-6">
             <div className="flex gap-2 p-1 bg-[#121214] border border-slate-800 rounded-xl w-fit">
-              <FilterBtn label="All Items" active={filter === 'all'} onClick={() => setFilter('all')} count={items.length} />
-              <FilterBtn label="Live" active={filter === 'LIVE'} onClick={() => setFilter('LIVE')} count={items.filter(i => i.status === 'LIVE').length} />
-              <FilterBtn label="Closed" active={filter === 'CLOSED'} onClick={() => setFilter('CLOSED')} count={items.filter(i => i.status === 'CLOSED').length} />
+              <FilterBtn label="All Items" active={filter === 'ALL'} onClick={() => setFilter(Status.ALL)} count={items.length} />
+              <FilterBtn label="Live" active={filter === 'LIVE'} onClick={() => setFilter(Status.LIVE)} count={items.filter(i => i.status === 'LIVE').length} />
+              <FilterBtn label="Closed" active={filter === 'CLOSED'} onClick={() => setFilter(Status.CLOSED)} count={items.filter(i => i.status === 'CLOSED').length} />
             </div>
 
             <div className="bg-[#121214] border border-slate-800 rounded-2xl overflow-hidden">
@@ -267,7 +268,7 @@ const App: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
-                  {filteredItems.map(item => (
+                  {items.map(item => (
                     <tr key={item.id} className="hover:bg-slate-800/20 transition-colors group text-sm">
                       <td className="px-6 py-4">
                         <p className="font-bold text-white">{item.title}</p>
@@ -289,7 +290,7 @@ const App: React.FC = () => {
                   ))}
                 </tbody>
               </table>
-              {filteredItems.length === 0 && (
+              {items.length === 0 && (
                 <div className="p-20 text-center">
                   <div className="inline-flex p-4 rounded-full bg-slate-800/50 mb-4">
                     <Search className="w-8 h-8 text-slate-500" />
@@ -307,18 +308,20 @@ const App: React.FC = () => {
             <div className="max-w-4xl">
                <h3 className="text-xl font-bold mb-6">Complete Bid Ledger</h3>
                <div className="space-y-1">
-                 {[...bids, ...bids, ...bids].map((bid, i) => (
+                 {[...bids].map((bid, i) => (
                     <div key={i} className="group flex items-center justify-between py-4 border-b border-slate-800 last:border-0 hover:bg-white/[0.02] px-4 -mx-4 rounded-lg transition-all">
                         <div className="flex gap-4 items-center">
                           <span className="text-xs font-mono text-slate-600 w-8">{String(i+1).padStart(2, '0')}</span>
                           <div>
-                            <span className="text-sm font-bold text-indigo-400">{bid.bidder}</span>
+                            <span className="text-sm font-bold text-indigo-400">{bid.user.name + " " + bid.user.email}</span>
                             <span className="text-sm text-slate-400 mx-2">placed a bid of</span>
-                            <span className="text-sm font-bold text-white">${bid.amount.toLocaleString()}</span>
-                            <span className="text-xs text-slate-500 ml-2">on {items.find(it => it.id === bid.itemId)?.title}</span>
+                            <span className="text-sm font-bold text-white">${bid.bidAmount.toLocaleString()}</span>
+                            <span className="text-xs text-slate-500 ml-2">on {bid.item.title}</span>
                           </div>
                         </div>
-                        <span className="text-xs text-slate-500 font-medium italic">{bid.time}</span>
+                        <span className="text-xs text-slate-500 font-medium italic">
+                          {new Date(bid.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
                     </div>
                  ))}
                </div>
@@ -342,29 +345,88 @@ const App: React.FC = () => {
               </button>
             </div>
             
-            <form onSubmit={handleAddItem} className="space-y-5">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
               {/* Title */}
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Item Title</label>
                 <input 
                   type="text" 
-                  value={newItem.title}
-                  onChange={e => setNewItem({...newItem, title: e.target.value})}
+                  {...register('title')}
                   className="w-full bg-[#1a1a1e] border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:border-indigo-500 outline-none transition-all"
                   placeholder="Vintage Watch, Rare Painting..."
-                  required
                 />
+                {errors.title && (
+                  <p className="text-red-400 text-xs mt-1">{errors.title.message}</p>
+                )}
               </div>
 
               {/* Description */}
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Description</label>
                 <textarea 
-                  value={newItem.description}
-                  onChange={e => setNewItem({...newItem, description: e.target.value})}
+                  {...register('description')}
                   className="w-full bg-[#1a1a1e] border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:border-indigo-500 outline-none min-h-[80px] transition-all"
                   placeholder="Provide detailed information about the asset..."
                 />
+                {errors.description && (
+                  <p className="text-red-400 text-xs mt-1">{errors.description.message}</p>
+                )}
+              </div>
+
+              {/* Image Upload */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                  Item Image <span className="text-red-400">*</span>
+                </label>
+                <div className="relative">
+                  {imagePreview ? (
+                    <div className="relative w-full h-48 bg-[#1a1a1e] border border-slate-800 rounded-xl overflow-hidden group">
+                      <img 
+                        src={imagePreview} 
+                        alt="Preview" 
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute top-2 right-2 p-2 bg-red-500 hover:bg-red-600 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                      >
+                        <X className="w-4 h-4 text-white" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="absolute bottom-2 right-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-bold transition-all opacity-0 group-hover:opacity-100"
+                      >
+                        Change Image
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full h-48 bg-[#1a1a1e] border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center gap-3 hover:border-indigo-500 transition-all group"
+                    >
+                      <div className="p-3 bg-slate-800/50 rounded-xl group-hover:bg-indigo-500/10 transition-all">
+                        <ImageIcon className="w-8 h-8 text-slate-500 group-hover:text-indigo-400 transition-all" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-bold text-slate-400 group-hover:text-indigo-400 transition-all">Click to upload image</p>
+                        <p className="text-xs text-slate-600 mt-1">PNG, JPG up to 5MB</p>
+                      </div>
+                    </button>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
+                </div>
+                {imageError && (
+                  <p className="text-red-400 text-xs mt-1">{imageError}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -373,24 +435,28 @@ const App: React.FC = () => {
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Min Bid Price ($)</label>
                   <input 
                     type="number" 
-                    value={newItem.minBidPrice}
-                    onChange={e => setNewItem({...newItem, minBidPrice: e.target.value})}
+                    step="0.01"
+                    {...register('minBidPrice')}
                     className="w-full bg-[#1a1a1e] border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:border-indigo-500 outline-none transition-all"
                     placeholder="1.00"
-                    required
                   />
+                  {errors.minBidPrice && (
+                    <p className="text-red-400 text-xs mt-1">{errors.minBidPrice.message}</p>
+                  )}
                 </div>
                 {/* Status Selection */}
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Initial Status</label>
                   <select 
-                    value={newItem.status}
-                    onChange={e => setNewItem({...newItem, status: e.target.value as Item['status']})}
+                    {...register('status')}
                     className="w-full bg-[#1a1a1e] border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
                   >
                     <option value="UPCOMING">Upcoming</option>
                     <option value="LIVE">Live Now</option>
                   </select>
+                  {errors.status && (
+                    <p className="text-red-400 text-xs mt-1">{errors.status.message}</p>
+                  )}
                 </div>
               </div>
 
@@ -400,46 +466,46 @@ const App: React.FC = () => {
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Start Date & Time</label>
                   <input 
                     type="datetime-local" 
-                    value={newItem.startTime}
-                    onChange={e => setNewItem({...newItem, startTime: e.target.value})}
+                    {...register('startTime')}
                     className="w-full bg-[#1a1a1e] border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:border-indigo-500 outline-none transition-all"
-                    required
                   />
+                  {errors.startTime && (
+                    <p className="text-red-400 text-xs mt-1">{errors.startTime.message}</p>
+                  )}
                 </div>
                 {/* End Time */}
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">End Date & Time</label>
                   <input 
                     type="datetime-local" 
-                    value={newItem.endTime}
-                    onChange={e => setNewItem({...newItem, endTime: e.target.value})}
+                    {...register('endTime')}
                     className="w-full bg-[#1a1a1e] border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:border-indigo-500 outline-none transition-all"
-                    required
                   />
+                  {errors.endTime && (
+                    <p className="text-red-400 text-xs mt-1">{errors.endTime.message}</p>
+                  )}
                 </div>
               </div>
 
-              {/* Auto Close Toggle */}
-              <div className="flex items-center justify-between p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-xl">
-                <div>
-                  <p className="text-sm font-bold text-indigo-400">Auto Close</p>
-                  <p className="text-[10px] text-slate-500">Automatically end auction at End Time</p>
-                </div>
-                <button 
-                  type="button"
-                  onClick={() => setNewItem({...newItem, autoClose: !newItem.autoClose})}
-                  className={`w-12 h-6 rounded-full transition-all relative ${newItem.autoClose ? 'bg-indigo-600' : 'bg-slate-800'}`}
-                >
-                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${newItem.autoClose ? 'left-7' : 'left-1'}`} />
-                </button>
-              </div>
+        
               
               <div className="pt-2 flex gap-3">
-                <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 px-4 py-3 rounded-xl border border-slate-800 text-sm font-bold hover:bg-slate-800 transition-colors">
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    reset();
+                    setShowAddModal(false);
+                  }} 
+                  className="flex-1 px-4 py-3 rounded-xl border border-slate-800 text-sm font-bold hover:bg-slate-800 transition-colors"
+                >
                   Cancel
                 </button>
-                <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-500 px-4 py-3 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-900/20">
-                  Create Item
+                <button 
+                  type="submit" 
+                  disabled={isSubmitting}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-500 px-4 py-3 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? 'Creating...' : 'Create Item'}
                 </button>
               </div>
             </form>

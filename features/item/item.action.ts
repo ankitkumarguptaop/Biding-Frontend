@@ -10,7 +10,7 @@ export const listItemAction = createAsyncThunk(
   async (data: Status, { rejectWithValue }) => {
     try {
       const response = await listItem(data);
-      toast.success("Items listed successfully!");
+      // toast.success("Items listed successfully!");
       return response.data;
     } catch (error: any) {
       const message =
@@ -28,7 +28,7 @@ export const getItemAction = createAsyncThunk(
   async (id: string, { rejectWithValue }) => {
     try {
       const response = await getItem(id);
-      toast.success("Item retrieved successfully!");
+      // toast.success("Item retrieved successfully!");
       return response.data;
     } catch (error: any) {
       const message =
