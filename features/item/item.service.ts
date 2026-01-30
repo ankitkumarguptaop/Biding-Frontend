@@ -1,8 +1,8 @@
 import { axiosInstance } from "@/lib/axios";
-import { Status } from "./item.slice";
+import { filters } from "./item.type";
 
-export const listItem = (data?: Status) => {
-  return axiosInstance.get("/items", { params: {status: data} });
+export const listItem = (data?: filters) => {
+  return axiosInstance.get("/items", { params: {status: data?.status, search: data?.search} });
 };
 
 export const getItem = (id: string) => {

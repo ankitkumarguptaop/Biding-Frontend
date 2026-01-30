@@ -13,7 +13,12 @@ import {
 import { useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/store/store-hook";
 import Image from "next/image";
-import { Item, Status } from "@/features/item/item.slice";
+import {
+  changeStatus,
+  Item,
+  setItems,
+  Status,
+} from "@/features/item/item.slice";
 import { getItemAction, listItemAction } from "@/features/item/item.action";
 import { getSocket } from "@/lib/socket";
 
@@ -28,29 +33,47 @@ export default function App() {
   const [filter, setFilter] = useState<Status>(Status.ALL);
 
   useEffect(() => {
-    dispatch(listItemAction(filter));
+    const id = setTimeout(() => {
+      dispatch(listItemAction({ search: searchQuery, status: filter }));
+    }, 1000);
+
+    return () => clearTimeout(id); 
+  }, [searchQuery]);
+
+  useEffect(() => {
+    dispatch(listItemAction({ search: searchQuery, status: filter }));
   }, [filter]);
-      useEffect(() => {
-      const socket = getSocket();
-  
-      socket.on("connect", () => {
-        console.log("Connected to server:", socket.id);
-      });
-  
-      socket.on("disconnect", () => {
-        console.log("Disconnected from server");
-      });
-  
-      socket.on("connect_error", (err) => {
-        console.error("Connection error:", err.message);
-      });
-  
-      return () => {
-        socket.off("connect");
-        socket.off("disconnect");
-        socket.off("connect_error");
-      };
-    }, []);
+
+  useEffect(() => {
+    const socket = getSocket();
+
+    socket.on("connect", () => {
+      console.log("Connected to server:", socket.id);
+    });
+
+    socket.on("disconnect", () => {
+      console.log("Disconnected from server");
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("Connection error:", err.message);
+    });
+
+    socket.on("item-status-changed", (data) => {
+      dispatch(changeStatus(data));
+    });
+    socket.on("bid-placed", (data) => {
+      dispatch(setItems(data));
+    });
+
+    return () => {
+      socket.off("item-status-changed");
+      socket.off("bid-placed");
+      socket.off("connect");
+      socket.off("disconnect");
+      socket.off("connect_error");
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-100 font-sans selection:bg-indigo-500/30">
@@ -111,8 +134,8 @@ export default function App() {
           auctions={items}
           activeFilter={filter}
           setFilter={setFilter}
-          onSelectItem= {async (id: string) => {
-            await  dispatch(getItemAction(id));
+          onSelectItem={async (id: string) => {
+            await dispatch(getItemAction(id));
             router.push(`items/${id}`);
           }}
         />
@@ -155,11 +178,13 @@ function HomePage({ auctions, onSelectItem, activeFilter, setFilter }: any) {
             className="group bg-slate-800/30 rounded-[2rem] border border-slate-700/50 overflow-hidden hover:border-indigo-500/50 transition-all hover:shadow-2xl hover:shadow-indigo-500/10 cursor-pointer flex flex-col"
           >
             <div className="relative h-64 overflow-hidden">
-              <img
-                src={item.image}
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                alt={item.title}
-              />
+              <div className="w-full h-full flex items-center justify-center">
+                <img
+                  src={item.image}
+                  className=" h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  alt={item.title}
+                />
+              </div>
               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent"></div>
               <div className="absolute top-4 left-4 flex gap-2">
                 {item.status === Status.LIVE && (
@@ -185,7 +210,7 @@ function HomePage({ auctions, onSelectItem, activeFilter, setFilter }: any) {
                 )}
               </div>
               <div className="absolute bottom-4 right-4 text-white font-black text-xl">
-                ${item.minBidPrice.toLocaleString()}
+                ${item.currentHighestBid.toLocaleString()}
               </div>
             </div>
 
@@ -199,7 +224,8 @@ function HomePage({ auctions, onSelectItem, activeFilter, setFilter }: any) {
                 {item.title}
               </h3>
               <p className="text-slate-400 text-sm line-clamp-2 mb-6">
-                {item.description}
+                {item?.currentWinner?.name &&
+                  `winner :  ${item?.currentWinner?.name?.toLocaleString()}`}
               </p>
 
               <div className="mt-auto pt-6 border-t border-slate-700/50 flex justify-between items-center">
@@ -209,7 +235,7 @@ function HomePage({ auctions, onSelectItem, activeFilter, setFilter }: any) {
                   </span>
                   <span className="font-bold text-white flex items-center gap-1">
                     <TrendingUp size={14} className="text-emerald-500" />{" "}
-                    {/* {item.bids.length} */}
+                    {item?.currentHighestBid}
                   </span>
                 </div>
                 <button className="p-3 bg-indigo-600 rounded-xl text-white shadow-lg shadow-indigo-500/20 group-hover:bg-indigo-500 transition-colors">

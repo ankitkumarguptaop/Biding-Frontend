@@ -7,4 +7,5 @@ export const getItemType = "item/getItem";
 
 export interface filters{
     status?: Status;
+    search?: string;
 }

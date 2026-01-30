@@ -5,7 +5,6 @@ import {
   Clock,
   TrendingUp,
   User,
-  Search,
   Bell,
   ShieldCheck,
   Award,
@@ -14,9 +13,12 @@ import { useAppDispatch, useAppSelector } from "@/store/store-hook";
 import { createBidAction } from "@/features/bid/bid.action";
 import { getItemAction } from "@/features/item/item.action";
 import { getSocket } from "@/lib/socket";
-import { useRouter } from "next/router";
-import { Socket } from "socket.io-client";
-import { setItem } from "@/features/item/item.slice";
+import {
+  changeCurrentItemStatus,
+  changeStatus,
+  setCurrentItem,
+  Status,
+} from "@/features/item/item.slice";
 
 const StatCard = ({
   label,
@@ -96,14 +98,18 @@ export default function App({ params }: { params: { id: string } }) {
     })();
 
     const handleNewBid = (data: any) => {
-      dispatch(setItem(data));
+      dispatch(setCurrentItem(data));
       setBidAmount(Number(data.bid.bidAmount));
     };
+    socket.on("item-status-changed", (data) => {
+      dispatch(changeCurrentItemStatus(data));
+    });
 
     socket.on("new-bid", handleNewBid);
 
     return () => {
       socket.off("new-bid", handleNewBid);
+      socket.off("item-status-changed");
     };
   }, []);
 
@@ -127,17 +133,6 @@ export default function App({ params }: { params: { id: string } }) {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="relative hidden md:block">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
-              size={14}
-            />
-            <input
-              type="text"
-              placeholder="Search..."
-              className="pl-9 pr-4 py-2 bg-slate-800/50 border border-slate-700 rounded-xl text-xs focus:outline-none w-48"
-            />
-          </div>
           <button className="p-2 bg-slate-800/50 border border-slate-700 rounded-xl text-slate-300 relative">
             <Bell size={18} />
             <span className="absolute top-2 right-2 w-2 h-2 bg-indigo-500 rounded-full border-2 border-[#0f172a]"></span>
@@ -154,15 +149,36 @@ export default function App({ params }: { params: { id: string } }) {
         <div className="lg:col-span-7 xl:col-span-8 flex flex-col min-h-0 gap-4">
           <div className="bg-slate-800/30 rounded-[2rem] border border-slate-700/50 flex flex-col flex-1 min-h-0 overflow-hidden">
             <div className="relative h-2/5 md:h-1/2 shrink-0">
-              <img
-                src={auction?.image}
-                alt={auction?.title}
-                className="w-full h-full object-cover opacity-90"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-transparent to-transparent"></div>
-              <div className="absolute top-4 left-4 bg-red-500 text-white px-3 py-1 rounded-full text-[10px] font-black flex items-center gap-2 uppercase tracking-widest">
-                <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span>{" "}
-                Live
+              <div className="w-full h-full flex items-center justify-center">
+                <img
+                  src={auction?.image}
+                  alt={auction?.title}
+                  className="h-full object-cover opacity-90"
+                />
+              </div>
+              <div
+                className={`absolute top-4 left-4 text-white px-3 py-1 rounded-full text-[10px] font-black flex items-center gap-2 uppercase tracking-widest ${
+                  auction.status === Status.UPCOMING
+                    ? "bg-blue-500"
+                    : auction.status === Status.EXPIRED
+                      ? "bg-gray-500"
+                      : auction.status === Status.CLOSED
+                        ? "bg-slate-700"
+                        : "bg-red-500"
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 bg-white rounded-full ${
+                    auction.status === Status.UPCOMING
+                      ? "animate-pulse"
+                      : auction.status === Status.EXPIRED
+                        ? "animate-bounce"
+                        : auction.status === Status.CLOSED
+                          ? "opacity-50"
+                          : "animate-ping"
+                  }`}
+                ></span>{" "}
+                {auction.status}
               </div>
             </div>
 
@@ -183,9 +199,12 @@ export default function App({ params }: { params: { id: string } }) {
                 </div>
                 <div className="bg-slate-900/50 px-4 py-2 rounded-2xl border border-slate-700/50 text-right">
                   <p className="text-[10px] text-slate-500 font-black uppercase mb-1">
-                    Highest Bid
+                    Highest Bid{" "}
+                    {auction?.currentWinner?.name
+                      ? `By :  ${auction.currentWinner.name}`
+                      : "None"}
                   </p>
-                  <p className="text-2xl font-black text-white">
+                  <p className="text-2xl font-black text-white text-center">
                     {auction?.currentHighestBid &&
                       Number(auction?.currentHighestBid).toLocaleString()}
                   </p>

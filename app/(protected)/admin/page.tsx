@@ -20,10 +20,11 @@ import {
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/store/store-hook";
 import { createItemAction, listItemAction } from "@/features/item/item.action";
-import { Status } from "@/features/item/item.slice";
+import { setItems, Status } from "@/features/item/item.slice";
 import { listBidAction } from "@/features/bid/bid.action";
 import Image from "next/image";
 import { getSocket } from "@/lib/socket";
+import { incrementTotalCount } from "@/features/bid/bid.slice";
 
 const createItemSchema = z
   .object({
@@ -146,17 +147,25 @@ const App: React.FC = () => {
     }
   };
   const [filter, setFilter] = useState<Status>(Status.ALL);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    dispatch(listItemAction(filter));
+    dispatch(listItemAction({ status: filter, search: searchQuery }));
   }, [filter]);
+
+  useEffect(() => {
+    const id = setTimeout(() => {
+      dispatch(listItemAction({ search: searchQuery, status: filter }));
+    }, 1000);
+
+    return () => clearTimeout(id); // cleanup on re-run
+  }, [searchQuery]);
 
   useEffect(() => {
     dispatch(listBidAction());
   }, []);
 
-
-    useEffect(() => {
+  useEffect(() => {
     const socket = getSocket();
 
     socket.on("connect", () => {
@@ -170,14 +179,18 @@ const App: React.FC = () => {
     socket.on("connect_error", (err) => {
       console.error("Connection error:", err.message);
     });
+    socket.on("bid-placed", (data) => {
+      dispatch(setItems(data));
+      dispatch(incrementTotalCount())
+    });
 
     return () => {
+      socket.off("bid-placed");
       socket.off("connect");
       socket.off("disconnect");
       socket.off("connect_error");
     };
   }, []);
-
 
   return (
     <div className="min-h-screen bg-[#0a0a0c] text-slate-200 flex flex-col md:flex-row font-sans">
@@ -255,7 +268,7 @@ const App: React.FC = () => {
               <StatCard
                 icon={<Box className="text-indigo-400" />}
                 label="Active Items"
-                value={10}
+                value={items.length}
               />
               <StatCard
                 icon={<TrendingUp className="text-emerald-400" />}
@@ -266,13 +279,25 @@ const App: React.FC = () => {
               <StatCard
                 icon={<CheckCircle2 className="text-purple-400" />}
                 label="Sold Items"
-                value={2}
+                value={items.reduce((acc, curr, i, items) => {
+                  if (curr?.currentWinner?.id) {
+                    return acc + 1;
+                  }
+                  return acc;
+                }, 0)}
                 trend="85% clearance"
               />
               <StatCard
                 icon={<ArrowUpRight className="text-orange-400" />}
                 label="Total Value"
-                value={`$${(100000 / 1000).toFixed(1)}k`}
+                value={`${items
+                  .reduce((acc, curr, i, items) => {
+                    if (curr?.currentWinner?.id && curr?.currentHighestBid) {
+                      return Number(acc) + Number(curr.currentHighestBid);
+                    }
+                    return acc;
+                  }, 0)
+                  .toFixed(1)}k`}
                 trend="Market cap"
               />
             </div>
@@ -370,25 +395,36 @@ const App: React.FC = () => {
         {/* Item Management View */}
         {activeTab === "items" && (
           <div className="space-y-6">
-            <div className="flex gap-2 p-1 bg-[#121214] border border-slate-800 rounded-xl w-fit">
-              <FilterBtn
-                label="All Items"
-                active={filter === "ALL"}
-                onClick={() => setFilter(Status.ALL)}
-                count={items.length}
-              />
-              <FilterBtn
-                label="Live"
-                active={filter === "LIVE"}
-                onClick={() => setFilter(Status.LIVE)}
-                count={items.filter((i) => i.status === "LIVE").length}
-              />
-              <FilterBtn
-                label="Closed"
-                active={filter === "CLOSED"}
-                onClick={() => setFilter(Status.CLOSED)}
-                count={items.filter((i) => i.status === "CLOSED").length}
-              />
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+              <div className="flex gap-2 p-1 bg-[#121214] border border-slate-800 rounded-xl">
+                <FilterBtn
+                  label="All Items"
+                  active={filter === "ALL"}
+                  onClick={() => setFilter(Status.ALL)}
+                  count={items.length}
+                />
+                <FilterBtn
+                  label="Live"
+                  active={filter === "LIVE"}
+                  onClick={() => setFilter(Status.LIVE)}
+                  count={items.length}
+                />
+                <FilterBtn
+                  label="Closed"
+                  active={filter === "CLOSED"}
+                  onClick={() => setFilter(Status.CLOSED)}
+                  count={items.length}
+                />
+              </div>
+
+              <div className="relative w-full sm:w-80">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input
+                  placeholder="Search items..."
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-[#121214] border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500/50 focus:outline-none transition-all"
+                />
+              </div>
             </div>
 
             <div className="bg-[#121214] border border-slate-800 rounded-2xl overflow-hidden">
@@ -758,11 +794,13 @@ const FilterBtn = ({ label, active, onClick, count }: any) => (
     }`}
   >
     {label}
-    <span
-      className={`px-1.5 py-0.5 rounded-md text-[9px] ${active ? "bg-white/20" : "bg-slate-800 text-slate-600"}`}
-    >
-      {count}
-    </span>
+    {active && (
+      <span
+        className={`px-1.5 py-0.5 rounded-md text-[9px] ${active ? "bg-white/20" : "bg-slate-800 text-slate-600"}`}
+      >
+        {count}
+      </span>
+    )}
   </button>
 );
 

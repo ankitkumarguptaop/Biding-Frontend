@@ -1,6 +1,7 @@
 import { createSlice, current } from "@reduxjs/toolkit";
 import { createItemAction, getItemAction, listItemAction } from "./item.action";
 import { Inter } from "next/font/google";
+import { set } from "zod";
 
 export enum Status {
   UPCOMING = "UPCOMING",
@@ -58,14 +59,37 @@ const itemSlice = createSlice({
   name: "item",
   initialState,
   reducers: {
-    setItem: (state, action) => {
+    setCurrentItem: (state, action) => {
       state.currentItem = {
         ...state.currentItem,
         currentHighestBid: action.payload.bid.bidAmount,
         currentWinner: action.payload.bid.user,
         bids: [action.payload.bid, ...state.currentItem.bids],
       };
-      console.log(state.currentItem)
+    },
+    changeStatus: (state, action) => {
+      state.items = state.items.map((item) =>
+        item.id === action.payload.itemId
+          ? { ...item, status: action.payload.status }
+          : item,
+      );
+    },
+    changeCurrentItemStatus: (state, action) => {
+      state.currentItem = {
+        ...state.currentItem,
+        status: action.payload.status,
+      };
+    },
+    setItems: (state, action) => {
+      state.items = state.items.map((item) =>
+        item.id === action.payload.bid.item.id
+          ? {
+              ...item,
+              currentHighestBid: action.payload.bid.bidAmount,
+              currentWinner: action.payload.bid.user,
+            }
+          : item,
+      );
     },
   },
   extraReducers: (builder) => {
@@ -102,4 +126,4 @@ const itemSlice = createSlice({
 });
 
 export const itemReducer = itemSlice.reducer;
-export const { setItem } = itemSlice.actions;
+export const { setCurrentItem, changeStatus, setItems ,changeCurrentItemStatus} = itemSlice.actions;

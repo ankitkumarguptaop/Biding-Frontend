@@ -3,14 +3,12 @@ import { createAsyncThunk } from "@reduxjs/toolkit";
 import { toast } from "sonner";
 import { createItemType, filters, getItemType, listItemType } from "./item.type";
 import { createItem, getItem, listItem } from "./item.service";
-import { Status } from "./item.slice";
 
 export const listItemAction = createAsyncThunk(
   listItemType,
-  async (data: Status, { rejectWithValue }) => {
+  async (data: filters, { rejectWithValue }) => {
     try {
       const response = await listItem(data);
-      // toast.success("Items listed successfully!");
       return response.data;
     } catch (error: any) {
       const message =
@@ -28,7 +26,6 @@ export const getItemAction = createAsyncThunk(
   async (id: string, { rejectWithValue }) => {
     try {
       const response = await getItem(id);
-      // toast.success("Item retrieved successfully!");
       return response.data;
     } catch (error: any) {
       const message =

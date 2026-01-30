@@ -33,7 +33,11 @@ const initialState: BidInitialState = {
 const bidSlice = createSlice({
   name: "bid",
   initialState,
-  reducers: {},
+  reducers: {
+    incrementTotalCount: (state) => {
+      state.totalCount = (state.totalCount || 0) + 1; 
+    }
+  },
   extraReducers: (builder) => {
     builder.addCase(createBidAction.pending, (state, action) => {
       state.isLoading = true;
@@ -59,3 +63,4 @@ const bidSlice = createSlice({
 });
 
 export const bidReducer = bidSlice.reducer;
+export const { incrementTotalCount } = bidSlice.actions;
