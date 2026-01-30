@@ -28,7 +28,6 @@ export const listBidAction = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await listBid();
-      toast.success("Bid created successfully!");
       return response.data;
     } catch (error: any) {
       const message =

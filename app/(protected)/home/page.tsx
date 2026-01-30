@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 import {
   Gavel,
@@ -9,6 +9,9 @@ import {
   Bell,
   ArrowUpRight,
   Filter,
+  LogOut,
+  User,
+  Mail,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/store/store-hook";
@@ -21,6 +24,7 @@ import {
 } from "@/features/item/item.slice";
 import { getItemAction, listItemAction } from "@/features/item/item.action";
 import { getSocket } from "@/lib/socket";
+import { logout } from "@/features/user/user.slice";
 
 export default function App() {
   const router = useRouter();
@@ -31,6 +35,24 @@ export default function App() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState<Status>(Status.ALL);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    };
+
+    if (showProfileMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showProfileMenu]);
 
   useEffect(() => {
     const id = setTimeout(() => {
@@ -89,7 +111,7 @@ export default function App() {
               <div className="bg-indigo-600 p-2 rounded-lg shadow-lg shadow-indigo-500/20">
                 <Gavel size={28} />
               </div>
-              NEO<span className="text-indigo-400">BID</span>
+             BidMaster <span className="text-indigo-400">Pro</span>
             </h1>
             <p className="text-slate-400 mt-1 font-medium flex items-center gap-2">
               <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
@@ -119,14 +141,41 @@ export default function App() {
               <Bell size={22} />
               <span className="absolute top-3 right-3 w-2.5 h-2.5 bg-indigo-500 rounded-full border-2 border-[#0f172a]"></span>
             </button>
-            <Image
-              width={"500"}
-              height={500}
-              className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold border border-white/10 shadow-xl cursor-pointer hover:scale-105 transition-transform"
-              style={{ overflow: "hidden" }}
-              src={user.image}
-              alt="user image"
-            ></Image>
+            <div className="relative" ref={profileMenuRef}>
+              <Image
+                width={"500"}
+                height={500}
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold border border-white/10 shadow-xl cursor-pointer hover:scale-105 transition-transform"
+                style={{ overflow: "hidden" }}
+                src={user.image}
+                alt="user image"
+              />
+              {showProfileMenu && (
+                <div className="absolute right-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50">
+                  <div className="p-4 border-b border-slate-700">
+                    <div className="flex items-center gap-3 mb-2">
+                      <User className="w-4 h-4 text-indigo-400" />
+                      <p className="text-sm font-bold text-white">{user.name}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Mail className="w-4 h-4 text-slate-500" />
+                      <p className="text-xs text-slate-400">{user.email}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      dispatch(logout());
+                      router.push('/');
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Logout</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 

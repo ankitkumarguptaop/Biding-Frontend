@@ -17,6 +17,9 @@ import {
   Clock,
   X,
   Image as ImageIcon,
+  LogOut,
+  User,
+  Mail,
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/store/store-hook";
 import { createItemAction, listItemAction } from "@/features/item/item.action";
@@ -25,6 +28,8 @@ import { listBidAction } from "@/features/bid/bid.action";
 import Image from "next/image";
 import { getSocket } from "@/lib/socket";
 import { incrementTotalCount } from "@/features/bid/bid.slice";
+import { logout } from "@/features/user/user.slice";
+import { useRouter } from "next/navigation";
 
 const createItemSchema = z
   .object({
@@ -61,11 +66,15 @@ type CreateItemFormData = z.infer<typeof createItemSchema>;
 
 const App: React.FC = () => {
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const { bids, totalCount } = useAppSelector((state) => state.bid);
+  const user = useAppSelector((state) => state.user);
   const [activeTab, setActiveTab] = useState<"dashboard" | "items" | "history">(
     "dashboard",
   );
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string>("");
@@ -166,6 +175,22 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    };
+
+    if (showProfileMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showProfileMenu]);
+
+  useEffect(() => {
     const socket = getSocket();
 
     socket.on("connect", () => {
@@ -226,16 +251,45 @@ const App: React.FC = () => {
         </nav>
 
         <div className="mt-auto pt-6 border-t border-slate-800">
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 font-bold">
-              AD
+          <div className="relative" ref={profileMenuRef}>
+            <div 
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="flex items-center gap-3 px-2 cursor-pointer hover:bg-slate-800/50 rounded-lg p-2 transition-all"
+            >
+              <div className="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 font-bold">
+                {user.name.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p className="text-sm font-bold">{user.name}</p>
+                <p className="text-[10px] text-slate-500 uppercase font-black">
+                  {user.role === 'admin' ? 'Super Admin' : 'User'}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-bold">Admin User</p>
-              <p className="text-[10px] text-slate-500 uppercase font-black">
-                Super Admin
-              </p>
-            </div>
+            {showProfileMenu && (
+              <div className="absolute bottom-full left-0 right-0 mb-2 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50">
+                <div className="p-4 border-b border-slate-700">
+                  <div className="flex items-center gap-3 mb-2">
+                    <User className="w-4 h-4 text-indigo-400" />
+                    <p className="text-sm font-bold text-white">{user.name}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Mail className="w-4 h-4 text-slate-500" />
+                    <p className="text-xs text-slate-400">{user.email}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    dispatch(logout());
+                    router.push('/');
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Logout</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </aside>

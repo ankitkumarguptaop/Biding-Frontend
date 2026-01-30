@@ -39,10 +39,18 @@ const App: React.FC = () => {
   });
 
   const onSubmit = async (data: LoginFormData): Promise<void> => {
-    await dispatch(
+    const result = await dispatch(
       signInAction({ email: data.email, password: data.password }),
     );
-    router.push("/home");
+    
+    if (result.meta.requestStatus === 'fulfilled') {
+      const userRole = result.payload.data.user.role;
+      if (userRole === 'ADMIN') {
+        router.replace('/admin');
+      } else {
+        router.replace('/home');
+      }
+    }
   };
 
   return (

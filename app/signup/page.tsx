@@ -114,7 +114,7 @@ const App: React.FC = () => {
     }
 
     const res = await dispatch(signUpAction(formData));
-    if (res.meta.requestStatus) {
+    if (res.meta.requestStatus === 'fulfilled') {
       reset();
       setImagePreview(null);
       setSelectedFile(null);
@@ -122,7 +122,13 @@ const App: React.FC = () => {
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
-      redirect("/");
+      
+      const userRole = res.payload.role;
+      if (userRole === 'ADMIN') {
+        redirect('/admin');
+      } else {
+        redirect('/home');
+      }
     }
   };
 

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Gavel,
   Clock,
@@ -8,6 +8,8 @@ import {
   Bell,
   ShieldCheck,
   Award,
+  LogOut,
+  Mail,
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/store/store-hook";
 import { createBidAction } from "@/features/bid/bid.action";
@@ -19,6 +21,8 @@ import {
   setCurrentItem,
   Status,
 } from "@/features/item/item.slice";
+import { logout } from "@/features/user/user.slice";
+import { useRouter } from "next/navigation";
 
 const StatCard = ({
   label,
@@ -46,12 +50,32 @@ const StatCard = ({
 
 export default function App({ params }: { params: { id: string } }) {
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const socket = getSocket();
   const auction = useAppSelector((state) => state.item.currentItem);
   const { isLoading } = useAppSelector((state) => state.bid);
   const currentUserId = useAppSelector((state) => state.user.id);
+  const user = useAppSelector((state) => state.user);
   const [bidAmount, setBidAmount] = useState<number>(0);
   const [timeLeft, setTimeLeft] = useState<string>("");
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    };
+
+    if (showProfileMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showProfileMenu]);
 
   useEffect(() => {
     if (!auction) return;
@@ -128,7 +152,7 @@ export default function App({ params }: { params: { id: string } }) {
             <Gavel size={20} />
           </div>
           <h1 className="text-xl font-black tracking-tight">
-            NEO<span className="text-indigo-400">BID</span>
+            BidMaster<span className="text-indigo-400">Pro</span>
           </h1>
         </div>
 
@@ -137,8 +161,37 @@ export default function App({ params }: { params: { id: string } }) {
             <Bell size={18} />
             <span className="absolute top-2 right-2 w-2 h-2 bg-indigo-500 rounded-full border-2 border-[#0f172a]"></span>
           </button>
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold border border-white/10 cursor-pointer">
-            JD
+          <div className="relative" ref={profileMenuRef}>
+            <div 
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold border border-white/10 cursor-pointer hover:scale-105 transition-transform"
+            >
+              {user.name.charAt(0).toUpperCase()}
+            </div>
+            {showProfileMenu && (
+              <div className="absolute right-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50">
+                <div className="p-4 border-b border-slate-700">
+                  <div className="flex items-center gap-3 mb-2">
+                    <User className="w-4 h-4 text-indigo-400" />
+                    <p className="text-sm font-bold text-white">{user.name}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Mail className="w-4 h-4 text-slate-500" />
+                    <p className="text-xs text-slate-400">{user.email}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    dispatch(logout());
+                    router.push('/');
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Logout</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
