@@ -1,6 +1,7 @@
 import { bidReducer } from "@/features/bid/bid.slice";
 import { itemReducer } from "@/features/item/item.slice";
 import { userReducer } from "@/features/user/user.slice";
+import { notificationReducer } from "@/features/notification/notification.slice";
 import type { Action, ThunkAction } from "@reduxjs/toolkit";
 import { combineSlices, configureStore } from "@reduxjs/toolkit";
 import {
@@ -25,6 +26,7 @@ const rootReducer = combineSlices({
   user: userReducer,
   item: itemReducer,
   bid: bidReducer,
+  notification : notificationReducer,
   
 });
 

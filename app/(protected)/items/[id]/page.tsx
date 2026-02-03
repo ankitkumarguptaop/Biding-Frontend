@@ -23,6 +23,8 @@ import {
 } from "@/features/item/item.slice";
 import { logout } from "@/features/user/user.slice";
 import { useRouter } from "next/navigation";
+import Notifications from "@/components/notification";
+import { listNotificationsAction } from "@/features/notification/notification.action";
 
 const StatCard = ({
   label,
@@ -63,17 +65,20 @@ export default function App({ params }: { params: { id: string } }) {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+      if (
+        profileMenuRef.current &&
+        !profileMenuRef.current.contains(event.target as Node)
+      ) {
         setShowProfileMenu(false);
       }
     };
 
     if (showProfileMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside);
     }
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showProfileMenu]);
 
@@ -127,6 +132,7 @@ export default function App({ params }: { params: { id: string } }) {
     };
     socket.on("item-status-changed", (data) => {
       dispatch(changeCurrentItemStatus(data));
+      dispatch(listNotificationsAction());
     });
 
     socket.on("new-bid", handleNewBid);
@@ -157,12 +163,9 @@ export default function App({ params }: { params: { id: string } }) {
         </div>
 
         <div className="flex items-center gap-4">
-          <button className="p-2 bg-slate-800/50 border border-slate-700 rounded-xl text-slate-300 relative">
-            <Bell size={18} />
-            <span className="absolute top-2 right-2 w-2 h-2 bg-indigo-500 rounded-full border-2 border-[#0f172a]"></span>
-          </button>
+          <Notifications />
           <div className="relative" ref={profileMenuRef}>
-            <div 
+            <div
               onClick={() => setShowProfileMenu(!showProfileMenu)}
               className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold border border-white/10 cursor-pointer hover:scale-105 transition-transform"
             >
@@ -183,7 +186,7 @@ export default function App({ params }: { params: { id: string } }) {
                 <button
                   onClick={() => {
                     dispatch(logout());
-                    router.push('/');
+                    router.push("/");
                   }}
                   className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all"
                 >

@@ -25,6 +25,9 @@ import {
 import { getItemAction, listItemAction } from "@/features/item/item.action";
 import { getSocket } from "@/lib/socket";
 import { logout } from "@/features/user/user.slice";
+import Notifications from "@/components/notification";
+import { addNewNotification } from "@/features/notification/notification.slice";
+import { listNotificationsAction } from "@/features/notification/notification.action";
 
 export default function App() {
   const router = useRouter();
@@ -32,7 +35,6 @@ export default function App() {
   const items = useAppSelector((state) => state.item.items);
   const user = useAppSelector((state) => state.user);
   const [view, setView] = useState<"home" | "details">("home");
-
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState<Status>(Status.ALL);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -40,17 +42,20 @@ export default function App() {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+      if (
+        profileMenuRef.current &&
+        !profileMenuRef.current.contains(event.target as Node)
+      ) {
         setShowProfileMenu(false);
       }
     };
 
     if (showProfileMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside);
     }
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showProfileMenu]);
 
@@ -59,7 +64,7 @@ export default function App() {
       dispatch(listItemAction({ search: searchQuery, status: filter }));
     }, 1000);
 
-    return () => clearTimeout(id); 
+    return () => clearTimeout(id);
   }, [searchQuery]);
 
   useEffect(() => {
@@ -83,6 +88,7 @@ export default function App() {
 
     socket.on("item-status-changed", (data) => {
       dispatch(changeStatus(data));
+      dispatch(listNotificationsAction());
     });
     socket.on("bid-placed", (data) => {
       dispatch(setItems(data));
@@ -111,7 +117,7 @@ export default function App() {
               <div className="bg-indigo-600 p-2 rounded-lg shadow-lg shadow-indigo-500/20">
                 <Gavel size={28} />
               </div>
-             BidMaster <span className="text-indigo-400">Pro</span>
+              BidMaster <span className="text-indigo-400">Pro</span>
             </h1>
             <p className="text-slate-400 mt-1 font-medium flex items-center gap-2">
               <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
@@ -137,10 +143,9 @@ export default function App() {
                 />
               </div>
             )}
-            <button className="p-3 bg-slate-800/50 border border-slate-700 rounded-2xl hover:bg-slate-700 hover:border-slate-600 relative transition-all text-slate-300">
-              <Bell size={22} />
-              <span className="absolute top-3 right-3 w-2.5 h-2.5 bg-indigo-500 rounded-full border-2 border-[#0f172a]"></span>
-            </button>
+
+            <Notifications />
+
             <div className="relative" ref={profileMenuRef}>
               <Image
                 width={"500"}
@@ -156,7 +161,9 @@ export default function App() {
                   <div className="p-4 border-b border-slate-700">
                     <div className="flex items-center gap-3 mb-2">
                       <User className="w-4 h-4 text-indigo-400" />
-                      <p className="text-sm font-bold text-white">{user.name}</p>
+                      <p className="text-sm font-bold text-white">
+                        {user.name}
+                      </p>
                     </div>
                     <div className="flex items-center gap-3">
                       <Mail className="w-4 h-4 text-slate-500" />
@@ -166,7 +173,7 @@ export default function App() {
                   <button
                     onClick={() => {
                       dispatch(logout());
-                      router.push('/');
+                      router.push("/");
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all"
                   >
